@@ -75,7 +75,7 @@ async def on_connect(websocket, path):
 
 
 async def main():
-    server = await websockets.serve(on_connect, "0.0.0.0", 8000)
+    server = await websockets.serve(on_connect, "localhost", 8000)
     logging.info("WebSocket server started on ws://0.0.0.0:8000")
 
     await server.wait_closed()
