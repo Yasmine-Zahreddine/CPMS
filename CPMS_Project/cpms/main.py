@@ -8,6 +8,7 @@ from central_system import CentralSystem
 import os
 from dotenv import load_dotenv
 
+
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -55,6 +56,8 @@ def create_supabase_client() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
+
+
 async def on_connect(websocket, path):
     charge_point_id = path.strip('/')
     logging.info(f"New connection with path: {path}")
@@ -75,7 +78,7 @@ async def on_connect(websocket, path):
 
 
 async def main():
-    server = await websockets.serve(on_connect, "localhost", 8000)
+    server = await websockets.serve(on_connect, "0.0.0.0", 8000)
     logging.info("WebSocket server started on ws://0.0.0.0:8000")
 
     await server.wait_closed()
