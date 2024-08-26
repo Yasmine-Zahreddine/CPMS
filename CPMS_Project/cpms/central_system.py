@@ -11,6 +11,14 @@ from database import update_charge_point_status, insert_record, insert_diagnosti
 import asyncio
 
 
+async def _executeAsyncAfterDelay(coroutine, delaySeconds):
+    await asyncio.sleep(delaySeconds)
+    await coroutine
+
+
+def executeAsyncAfterDelay(coroutine, delaySeconds):
+    return asyncio.get_event_loop().create_task(_executeAsyncAfterDelay(coroutine, delaySeconds))
+
 class CentralSystem(CP):
     def __init__(self, supabase: Client, charge_point_id, websocket=None, heartbeat_timeout=120):
         super().__init__(connection=websocket, response_timeout=heartbeat_timeout, id=charge_point_id)
@@ -101,7 +109,7 @@ class CentralSystem(CP):
     async def on_heartbeat(self):
         """Handle the heartbeat request from the charge point."""
         logging.info(f"Heartbeat received from Charge Point Id : {self.id}")
-        insert_diagnostic(self.supabase, self.id, "Heartbeat", f"Heartbeat received from Charge Point id: {self.id}")
+        insert_diagnostic(self.supabase, self.id, "Heartbeat", f"Heartbeat received from Charge Point id: {self.id} ")
         self.charge_point_last_heartbeat[self.id] = datetime.utcnow()
         try:
             update_charge_point_status(self.supabase, self.id, "online")
@@ -110,36 +118,19 @@ class CentralSystem(CP):
         except Exception as e:
             logging.error(f"Failed to update the charge point status: {e}")
             insert_diagnostic(self.supabase, self.id, "Error", f"Failed to update the charge point status: {e}")
-        return call_result.Heartbeat(current_time=datetime.utcnow().isoformat())
-
-    async def monitor_heartbeats(self):
-        while True:
-            now = datetime.utcnow()
-            logging.debug(f"Monitoring heartbeats at {now}")
-            insert_diagnostic(self.supabase, self.id, "HeartBeat", f"Monitoring heartbeats at {now}")
-            for charge_point_id, last_heartbeat in list(self.charge_point_last_heartbeat.items()):
-                if (now - last_heartbeat) > timedelta(seconds=self._response_timeout):
-                    logging.warning(f"Charge point {charge_point_id} missed its heartbeat. Marking it as offline.")
-                    insert_diagnostic(self.supabase, self.id, "Warning", f"Charge point {charge_point_id} missed its heartbeat. Marking it as offline.")
-                    try:
-                        update_charge_point_status(self.supabase, charge_point_id, "offline")
-                        insert_diagnostic(self.supabase, self.id, "Heartbeat", f"Charge point {charge_point_id} status marked as offline.")
-                        del self.charge_point_last_heartbeat[charge_point_id]
-                    except Exception as e:
-                        logging.error(f"Failed to update the charge point status: {e}")
-                        insert_diagnostic(self.supabase, self.id, "Error", f"Failed to update charge point {charge_point_id} status : {e}")
-            await asyncio.sleep(self._response_timeout / 2)
+        return call_result.Heartbeat(current_time=datetime.utcnow().isoformat() + "Z")
 
     @on(Action.MeterValues)
-    async def on_meter_values(self, charging_session_id, transaction_id, value):
+    async def on_meter_values(self, connector_id, transaction_id, meter_value):
         """Handle the MeterValues request from the charge point."""
-        logging.info(f"MeterValues received: Charging session {charging_session_id}, transaction id : {transaction_id} ,value: {value}")
-        insert_diagnostic(self.supabase, self.id, "MeterValues", f"MeterValues received: Charging session {charging_session_id}, transaction id : {transaction_id} ,value: {value}")
+        logging.info(
+            f"MeterValues received: connector id: {connector_id}, transaction id: {transaction_id}, value: {meter_value}")
+
+        # Example processing (update as needed)
         data = {
-            "charging_session_id": charging_session_id,
             "transaction_id": transaction_id,
-            "value": value,
-            "unit": "kwH",
+            "value": meter_value,  # Ensure you process this as needed
+            "unit": "kWh",
             "timestamp": datetime.utcnow()
         }
 
@@ -149,16 +140,29 @@ class CentralSystem(CP):
             logging.info("MeterValues data inserted into database")
         except Exception as e:
             logging.error(f"Failed to insert MeterValues data into database: {e}")
-            insert_diagnostic(self.supabase, self.id, "Exception", f"Failed to insert MeterValues data into database: {e}")
+            insert_diagnostic(self.supabase, self.id, "Exception",
+                              f"Failed to insert MeterValues data into database: {e}")
 
         return call_result.MeterValues()
+
+    async def on_get_configuration(self, **kwargs):
+        logging.info("Received the get configuration message.")
+        try:
+            response = await self.call(call.GetConfiguration())
+            logging.info(f"Received GetConfiguration response: {response}")
+
+        except asyncio.TimeoutError:
+            logging.error("Timeout while waiting for GetConfiguration response.")
+
+        except Exception as e:
+            logging.error(f"Error occurred while handling GetConfiguration: {e}")
 
     @on(Action.StartTransaction)
     async def on_start_transaction(self, id_tag, meter_start, timestamp, charging_profile=None, **kwargs):
         """Handle the StartTransaction request from the charge point."""
         logging.info(
-            f"StartTransaction received: id_tag={id_tag}, charge point {self.id} charging_profile={charging_profile}")
-        insert_diagnostic(self.supabase, self.id, "StartTransaction", f"StartTransaction received: id_tag={id_tag}, charging_profile={charging_profile}")
+            f"StartTransaction received: id_tag={id_tag}, charge point {self.id} ")
+        insert_diagnostic(self.supabase, self.id, "StartTransaction", f"StartTransaction received: id_tag={id_tag}")
         logging.info(f"Inserted diagnostic for start transaction.")
         user_id = fetch_user_by_username_or_email(self.supabase, id_tag)
         # Create Charging session
@@ -191,8 +195,11 @@ class CentralSystem(CP):
             logging.error(f"Failed to insert transaction data into database: {e}")
             insert_diagnostic(self.supabase, self.id, "Exception", f"Failed to insert transaction data into database")
 
-        id_tag_info = IdTagInfo(status=AuthorizationStatus.accepted)
-
+        id_tag_info = IdTagInfo(
+            status=AuthorizationStatus.accepted,
+            expiry_date=None,
+            parent_id_tag=None
+        )
         return call_result.StartTransaction(
             id_tag_info=id_tag_info,
             transaction_id=transaction_id,
@@ -205,6 +212,7 @@ class CentralSystem(CP):
             f"StatusNotification received: connector_id={connector_id}, status={status}, error_code={error_code}")
         insert_diagnostic(self.supabase, self.id, "StatusNotification",
                           f"StatusNotification received: connector_id={connector_id}, status={status}, error_code={error_code}")
+        # await executeAsyncAfterDelay(self.on_get_configuration(), 1)
 
         try:
             update_charge_point_status(self.supabase, self.id, status)
