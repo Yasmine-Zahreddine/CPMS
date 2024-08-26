@@ -47,7 +47,8 @@ MarkupSafe==2.1.5
 matplotlib==3.8.3
 matplotlib-inline==0.1.6
 nest-asyncio==1.6.0
-numpy==1.26.4
+numpy==1.22.0
+
 ocpp==1.0.0
 opencv-python==4.9.0.80
 packaging==23.2
