@@ -91,7 +91,6 @@ class CentralSystem(CP):
             "reason": reason
         }
         try:
-            # Insert or update charge point information in the database
             insert_record(self.supabase, "boot_notifications", data)
             logging.info("BootNotification data inserted into database")
             insert_diagnostic(self.supabase, self.id, "BootNotification", "BootNotification inserted into the database")
@@ -126,10 +125,9 @@ class CentralSystem(CP):
         logging.info(
             f"MeterValues received: connector id: {connector_id}, transaction id: {transaction_id}, value: {meter_value}")
 
-        # Example processing (update as needed)
         data = {
             "transaction_id": transaction_id,
-            "value": meter_value,  # Ensure you process this as needed
+            "value": meter_value, 
             "unit": "kWh",
             "timestamp": datetime.utcnow()
         }
