@@ -56,8 +56,9 @@ async def route_message(central_system, message):
     except Exception as e:
         logging.error(f"Error handling message: {e}")
 
-@app.websocket('/ws/<cp_id>')
-async def on_connect(websocket, cp_id):
+@app.websocket('/ws')
+async def on_connect(websocket):
+    cp_id = path.strip('/') 
     logging.info(f"New WebSocket connection with cp_id: {cp_id}")
 
     try:
