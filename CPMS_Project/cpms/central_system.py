@@ -24,6 +24,7 @@ class CentralSystem(CP):
         super().__init__(connection=websocket, response_timeout=heartbeat_timeout, id=charge_point_id)
         self.charge_point_last_heartbeat = {}
         self.supabase = supabase
+        self.websocket = websocket
 
 
     @on(Action.Authorize)
@@ -48,7 +49,7 @@ class CentralSystem(CP):
         return call_result.Authorize(id_tag_info)
 
     @on(Action.BootNotification)
-    async def on_boot_notification(self, charge_point_vendor, charge_point_model, firmware_version, charge_point_serial_number=None,reason=None):
+    async def on_boot_notification(self, charge_point_vendor, charge_point_model=None, firmware_version=None, charge_point_serial_number=None,reason=None):
         """Handle the BootNotification request from the charge point."""
         reason = reason or "Unknown"
         charge_point_serial_number = charge_point_serial_number or "Unknown"
@@ -91,6 +92,7 @@ class CentralSystem(CP):
             "reason": reason
         }
         try:
+            # Insert or update charge point information in the database
             insert_record(self.supabase, "boot_notifications", data)
             logging.info("BootNotification data inserted into database")
             insert_diagnostic(self.supabase, self.id, "BootNotification", "BootNotification inserted into the database")
@@ -125,9 +127,10 @@ class CentralSystem(CP):
         logging.info(
             f"MeterValues received: connector id: {connector_id}, transaction id: {transaction_id}, value: {meter_value}")
 
+        # Example processing (update as needed)
         data = {
             "transaction_id": transaction_id,
-            "value": meter_value, 
+            "value": meter_value,  # Ensure you process this as needed
             "unit": "kWh",
             "timestamp": datetime.utcnow()
         }
@@ -156,7 +159,7 @@ class CentralSystem(CP):
             logging.error(f"Error occurred while handling GetConfiguration: {e}")
 
     @on(Action.StartTransaction)
-    async def on_start_transaction(self, id_tag, meter_start, timestamp, charging_profile=None, **kwargs):
+    async def on_start_transaction(self, id_tag, meter_start, timestamp, **kwargs):
         """Handle the StartTransaction request from the charge point."""
         logging.info(
             f"StartTransaction received: id_tag={id_tag}, charge point {self.id} ")
@@ -204,7 +207,7 @@ class CentralSystem(CP):
         )
 
     @on(Action.StatusNotification)
-    async def on_status_notification(self, connector_id, error_code, status, **kwargs):
+    async def on_status_notification(self, connector_id, error_code=None, status=None, **kwargs):
         """Handle the StatusNotification request from the charge point."""
         logging.info(
             f"StatusNotification received: connector_id={connector_id}, status={status}, error_code={error_code}")
