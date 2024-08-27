@@ -10,8 +10,6 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-port = int(os.getenv("PORT", 5000))
-
 
 app = Quart(__name__)
 
@@ -20,16 +18,13 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 logging.basicConfig(level=logging.INFO)
 
-
 def create_supabase_client() -> Client:
     if not SUPABASE_URL or not SUPABASE_KEY:
         raise ValueError("Supabase URL and key must be set.")
     logging.info(f"Creating Supabase client with URL: {SUPABASE_URL}")
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-
 supabase = create_supabase_client()
-
 
 async def route_message(central_system, message):
     try:
@@ -42,7 +37,7 @@ async def route_message(central_system, message):
             await central_system.on_authorize(*msg[3:])
         elif action == "Heartbeat":
             await central_system.on_heartbeat()
-        elif action == "StartTransaction" or action == "StartCharging":
+        elif action in ["StartTransaction", "StartCharging"]:
             await central_system.on_start_transaction(*msg[3:])
         elif action == "StopTransaction":
             await central_system.on_stop_transaction(*msg[3:])
@@ -61,13 +56,12 @@ async def route_message(central_system, message):
     except Exception as e:
         logging.error(f"Error handling message: {e}")
 
-
-async def on_connect(websocket, path):
-    charge_point_id = path.strip('/')
-    logging.info(f"New connection with path: {path}")
+@app.websocket('/ws/<cp_id>')
+async def on_connect(websocket, cp_id):
+    logging.info(f"New WebSocket connection with cp_id: {cp_id}")
 
     try:
-        central_system = CentralSystem(supabase, charge_point_id, websocket)
+        central_system = CentralSystem(supabase, cp_id, websocket)
         async for message in websocket:
             logging.info(f"Received message: {message}")
             await route_message(central_system, message)
@@ -76,21 +70,19 @@ async def on_connect(websocket, path):
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
     finally:
-        logging.info(f"Connection with {charge_point_id} closed.")
-
+        logging.info(f"Connection with cp_id {cp_id} closed.")
 
 @app.route('/start_transaction/<cp_id>', methods=['POST'])
 async def start_transaction(cp_id):
     data = await request.json
-    charge_point_id = cp_id
     id_tag = data.get('id_tag')
     meter = data.get('meter')
     timestamp = data.get('timestamp')
 
-    if not charge_point_id or not id_tag:
+    if not id_tag:
         return jsonify({"error": "Missing required parameters"}), 400
 
-    central_system = CentralSystem(supabase=supabase, charge_point_id=charge_point_id)
+    central_system = CentralSystem(supabase=supabase, charge_point_id=cp_id)
     try:
         await central_system.on_start_transaction(
             id_tag=id_tag,
@@ -102,19 +94,16 @@ async def start_transaction(cp_id):
         logging.error(f"Error initiating start transaction: {e}")
         return jsonify({"error": str(e)}), 500
 
-
 @app.route('/stop_transaction/<cp_id>', methods=['POST'])
 async def stop_transaction(cp_id):
     data = await request.json
     transaction_id = data.get('transaction_id')
     reason = data.get('reason')
-    charge_point_id = cp_id
 
     if not transaction_id:
         return jsonify({"error": "Missing transaction_id"}), 400
 
-    central_system = CentralSystem(supabase, charge_point_id)
-
+    central_system = CentralSystem(supabase, cp_id)
     try:
         await central_system.on_stop_transaction(
             transaction_id=transaction_id,
@@ -125,12 +114,9 @@ async def stop_transaction(cp_id):
         logging.error(f"Error initiating stop transaction: {e}")
         return jsonify({"error": str(e)}), 500
 
-
 @app.route("/get_config/<cp_id>")
 async def get_configuration(cp_id):
-    charge_point_id = cp_id
-    central_system = CentralSystem(supabase, charge_point_id)
-
+    central_system = CentralSystem(supabase, cp_id)
     try:
         await central_system.on_get_configuration()
         return jsonify({"status": "get configuration received"}), 200
@@ -138,13 +124,12 @@ async def get_configuration(cp_id):
         logging.error("Error calling get config")
         return jsonify({"error": str(e)}), 500
 
-
 async def start_servers():
-    ws_server = await websockets.serve(on_connect, "0.0.0.0", port)
-    logging.info(f"WebSocket server started on ws://0.0.0.0:{port}")
+    ws_server = await websockets.serve(on_connect, "0.0.0.0", 8000)
+    logging.info("WebSocket server started on ws://0.0.0.0:8000")
 
     # Run the Quart app concurrently
-    api_server = asyncio.create_task(app.run_task(host='0.0.0.0', port=port))
+    api_server = asyncio.create_task(app.run_task(host='0.0.0.0', port=5000))
 
     await ws_server.wait_closed()
     await api_server
