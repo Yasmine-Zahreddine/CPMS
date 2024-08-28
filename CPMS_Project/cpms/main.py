@@ -26,8 +26,8 @@ def create_supabase_client() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 supabase = create_supabase_client()
-
-
+ws_server = None
+central_system = None
 async def route_message(central_system, message):
     try:
         msg = json.loads(message)
@@ -60,14 +60,16 @@ async def route_message(central_system, message):
 
 @app.websocket('/ws/<cp_id>')
 async def on_connect(cp_id):
+    global central_system, ws_server
+    central_system = CentralSystem(supabase, cp_id, ws_server)
     logging.info(f"New WebSocket connection with cp_id: {cp_id}")
 
-    if websocket is None:
+    if ws_server is None:
         logging.error("WebSocket is None")
         return
 
     try:
-        async for message in websocket:
+        async for message in ws_server:
             logging.info(f"Received message: {message}")
             await route_message(central_system, message)
     except ConnectionClosedError as e:
@@ -79,6 +81,7 @@ async def on_connect(cp_id):
 
 @app.route('/start_transaction/<cp_id>', methods=['POST'])
 async def start_transaction(cp_id):
+    global central_system
     data = await request.json
     id_tag = data.get('id_tag')
     meter = data.get('meter')
@@ -100,6 +103,7 @@ async def start_transaction(cp_id):
 
 @app.route('/stop_transaction/<cp_id>', methods=['POST'])
 async def stop_transaction(cp_id):
+    global central_system
     data = await request.json
     transaction_id = data.get('transaction_id')
     reason = data.get('reason')
@@ -119,6 +123,7 @@ async def stop_transaction(cp_id):
 
 @app.route("/get_config/<cp_id>")
 async def get_configuration(cp_id):
+    global central_system
     try:
         await central_system.on_get_configuration()
         return jsonify({"status": "Get configuration received"}), 200
@@ -127,6 +132,7 @@ async def get_configuration(cp_id):
         return jsonify({"error": str(e)}), 500
 
 async def start_servers():
+    global ws_server
     ws_server = await websockets.serve(on_connect, "0.0.0.0", port)
     logging.info(f"WebSocket server started on ws://0.0.0.0:{port}")
 
