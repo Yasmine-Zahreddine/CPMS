@@ -14,7 +14,6 @@ load_dotenv()
 app = Quart(__name__)
 port = int(os.getenv('PORT', 5000))
 
-
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
@@ -27,6 +26,19 @@ def create_supabase_client() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 supabase = create_supabase_client()
+
+# Singleton for CentralSystem
+class CentralSystemSingleton:
+    _instance = None
+
+    @staticmethod
+    def get_instance(cp_id: str = None, ws=None) -> CentralSystem:
+        if CentralSystemSingleton._instance is None:
+            if cp_id is not None and ws is not None:
+                CentralSystemSingleton._instance = CentralSystem(supabase, cp_id, ws)
+            else:
+                raise ValueError("cp_id and websocket must be provided to create the instance")
+        return CentralSystemSingleton._instance
 
 async def route_message(central_system, message):
     try:
@@ -62,8 +74,13 @@ async def route_message(central_system, message):
 async def on_connect(cp_id):
     logging.info(f"New WebSocket connection with cp_id: {cp_id}")
 
+    if websocket is None:
+        logging.error("WebSocket is None")
+        return
+
     try:
-        central_system = CentralSystem(supabase, cp_id, websocket)
+        # Initialize CentralSystemSingleton
+        central_system = CentralSystemSingleton.get_instance(cp_id, websocket)
         async for message in websocket:
             logging.info(f"Received message: {message}")
             await route_message(central_system, message)
@@ -73,7 +90,6 @@ async def on_connect(cp_id):
         logging.error(f"Unexpected error: {e}")
     finally:
         logging.info(f"Connection with cp_id {cp_id} closed.")
-
 
 @app.route('/start_transaction/<cp_id>', methods=['POST'])
 async def start_transaction(cp_id):
@@ -85,8 +101,9 @@ async def start_transaction(cp_id):
     if not id_tag:
         return jsonify({"error": "Missing required parameters"}), 400
 
-    central_system = CentralSystem(supabase=supabase, charge_point_id=cp_id)
     try:
+        # Use Singleton instance
+        central_system = CentralSystemSingleton.get_instance(cp_id)
         await central_system.on_start_transaction(
             id_tag=id_tag,
             meter_start=meter,
@@ -106,8 +123,9 @@ async def stop_transaction(cp_id):
     if not transaction_id:
         return jsonify({"error": "Missing transaction_id"}), 400
 
-    central_system = CentralSystem(supabase, cp_id)
     try:
+        # Use Singleton instance
+        central_system = CentralSystemSingleton.get_instance(cp_id)
         await central_system.on_stop_transaction(
             transaction_id=transaction_id,
             reason=reason
@@ -119,12 +137,13 @@ async def stop_transaction(cp_id):
 
 @app.route("/get_config/<cp_id>")
 async def get_configuration(cp_id):
-    central_system = CentralSystem(supabase, cp_id)
     try:
+        # Use Singleton instance
+        central_system = CentralSystemSingleton.get_instance(cp_id)
         await central_system.on_get_configuration()
-        return jsonify({"status": "get configuration received"}), 200
+        return jsonify({"status": "Get configuration received"}), 200
     except Exception as e:
-        logging.error("Error calling get config")
+        logging.error(f"Error calling get configuration: {e}")
         return jsonify({"error": str(e)}), 500
 
 async def start_servers():
