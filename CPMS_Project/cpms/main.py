@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Quart(__name__)
+port = int(os.getenv('PORT', 5000))
+
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
@@ -58,7 +60,6 @@ async def route_message(central_system, message):
 
 @app.websocket('/ws/<cp_id>')
 async def on_connect(cp_id):
-    cp_id = cp_id
     logging.info(f"New WebSocket connection with cp_id: {cp_id}")
 
     try:
@@ -72,6 +73,7 @@ async def on_connect(cp_id):
         logging.error(f"Unexpected error: {e}")
     finally:
         logging.info(f"Connection with cp_id {cp_id} closed.")
+
 
 @app.route('/start_transaction/<cp_id>', methods=['POST'])
 async def start_transaction(cp_id):
@@ -126,10 +128,10 @@ async def get_configuration(cp_id):
         return jsonify({"error": str(e)}), 500
 
 async def start_servers():
-    ws_server = await websockets.serve(on_connect, "0.0.0.0", 8000)
-    logging.info("WebSocket server started on ws://0.0.0.0:8000")
+    ws_server = await websockets.serve(on_connect, "0.0.0.0", port)
+    logging.info(f"WebSocket server started on ws://0.0.0.0:{port}")
 
-    api_server = asyncio.create_task(app.run_task(host='0.0.0.0', port=5000))
+    api_server = asyncio.create_task(app.run_task(host='0.0.0.0', port=port))
 
     await ws_server.wait_closed()
     await api_server
