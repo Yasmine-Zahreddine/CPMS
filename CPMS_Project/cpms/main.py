@@ -129,7 +129,6 @@ async def start_servers():
     ws_server = await websockets.serve(on_connect, "0.0.0.0", 8000)
     logging.info("WebSocket server started on ws://0.0.0.0:8000")
 
-    # Run the Quart app concurrently
     api_server = asyncio.create_task(app.run_task(host='0.0.0.0', port=5000))
 
     await ws_server.wait_closed()
