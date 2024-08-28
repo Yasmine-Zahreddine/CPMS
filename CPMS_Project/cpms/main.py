@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from quart import Quart, request, jsonify
+from quart import Quart, request, jsonify, websocket
 from websockets.exceptions import ConnectionClosedError
 from supabase import create_client, Client
 import websockets
