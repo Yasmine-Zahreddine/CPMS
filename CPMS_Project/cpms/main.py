@@ -27,18 +27,6 @@ def create_supabase_client() -> Client:
 
 supabase = create_supabase_client()
 
-# Singleton for CentralSystem
-class CentralSystemSingleton:
-    _instance = None
-
-    @staticmethod
-    def get_instance(cp_id: str = None, ws=None) -> CentralSystem:
-        if CentralSystemSingleton._instance is None:
-            if cp_id is not None and ws is not None:
-                CentralSystemSingleton._instance = CentralSystem(supabase, cp_id, ws)
-            else:
-                raise ValueError("cp_id and websocket must be provided to create the instance")
-        return CentralSystemSingleton._instance
 
 async def route_message(central_system, message):
     try:
@@ -79,8 +67,6 @@ async def on_connect(cp_id):
         return
 
     try:
-        # Initialize CentralSystemSingleton
-        central_system = CentralSystemSingleton.get_instance(cp_id, websocket)
         async for message in websocket:
             logging.info(f"Received message: {message}")
             await route_message(central_system, message)
@@ -102,8 +88,6 @@ async def start_transaction(cp_id):
         return jsonify({"error": "Missing required parameters"}), 400
 
     try:
-        # Use Singleton instance
-        central_system = CentralSystemSingleton.get_instance(cp_id)
         await central_system.on_start_transaction(
             id_tag=id_tag,
             meter_start=meter,
@@ -124,8 +108,6 @@ async def stop_transaction(cp_id):
         return jsonify({"error": "Missing transaction_id"}), 400
 
     try:
-        # Use Singleton instance
-        central_system = CentralSystemSingleton.get_instance(cp_id)
         await central_system.on_stop_transaction(
             transaction_id=transaction_id,
             reason=reason
@@ -138,8 +120,6 @@ async def stop_transaction(cp_id):
 @app.route("/get_config/<cp_id>")
 async def get_configuration(cp_id):
     try:
-        # Use Singleton instance
-        central_system = CentralSystemSingleton.get_instance(cp_id)
         await central_system.on_get_configuration()
         return jsonify({"status": "Get configuration received"}), 200
     except Exception as e:
@@ -151,7 +131,6 @@ async def start_servers():
     logging.info(f"WebSocket server started on ws://0.0.0.0:{port}")
 
     api_server = asyncio.create_task(app.run_task(host='0.0.0.0', port=port))
-
     await ws_server.wait_closed()
     await api_server
 
