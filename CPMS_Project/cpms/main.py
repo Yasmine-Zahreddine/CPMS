@@ -62,7 +62,7 @@ async def on_connect(cp_id):
     logging.info(f"New WebSocket connection with cp_id: {cp_id}")
 
     try:
-        central_system = CentralSystem(supabase, cp_id, websocket._get_current_object())
+        central_system = CentralSystem(supabase, cp_id, websocket)
         async for message in websocket:
             logging.info(f"Received message: {message}")
             await route_message(central_system, message)
