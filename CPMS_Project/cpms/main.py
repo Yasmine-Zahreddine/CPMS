@@ -26,9 +26,15 @@ def create_supabase_client() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 supabase = create_supabase_client()
-ws_server = None
-central_system = None
-async def route_message(central_system, message):
+
+central_systems = {}  # To hold CentralSystem instances for different connections
+
+async def route_message(cp_id, message):
+    central_system = central_systems.get(cp_id)
+    if not central_system:
+        logging.error(f"No CentralSystem instance for cp_id: {cp_id}")
+        return
+
     try:
         msg = json.loads(message)
         action = msg[2]
@@ -60,28 +66,26 @@ async def route_message(central_system, message):
 
 @app.websocket('/ws/<cp_id>')
 async def on_connect(cp_id):
-    global central_system, ws_server
-    central_system = CentralSystem(supabase, cp_id, ws_server)
     logging.info(f"New WebSocket connection with cp_id: {cp_id}")
 
-    if ws_server is None:
-        logging.error("WebSocket is None")
-        return
-
     try:
-        async for message in ws_server:
+        # Initialize CentralSystem for this connection
+        central_system = CentralSystem(supabase, cp_id, websocket)
+        central_systems[cp_id] = central_system
+
+        async for message in websocket:
             logging.info(f"Received message: {message}")
-            await route_message(central_system, message)
+            await route_message(cp_id, message)
     except ConnectionClosedError as e:
         logging.error(f"Connection closed error: {e}")
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
     finally:
         logging.info(f"Connection with cp_id {cp_id} closed.")
+        central_systems.pop(cp_id, None)  # Remove the instance when done
 
 @app.route('/start_transaction/<cp_id>', methods=['POST'])
 async def start_transaction(cp_id):
-    global central_system
     data = await request.json
     id_tag = data.get('id_tag')
     meter = data.get('meter')
@@ -91,6 +95,10 @@ async def start_transaction(cp_id):
         return jsonify({"error": "Missing required parameters"}), 400
 
     try:
+        central_system = central_systems.get(cp_id)
+        if not central_system:
+            raise ValueError("CentralSystem instance is not initialized")
+
         await central_system.on_start_transaction(
             id_tag=id_tag,
             meter_start=meter,
@@ -103,7 +111,6 @@ async def start_transaction(cp_id):
 
 @app.route('/stop_transaction/<cp_id>', methods=['POST'])
 async def stop_transaction(cp_id):
-    global central_system
     data = await request.json
     transaction_id = data.get('transaction_id')
     reason = data.get('reason')
@@ -112,6 +119,10 @@ async def stop_transaction(cp_id):
         return jsonify({"error": "Missing transaction_id"}), 400
 
     try:
+        central_system = central_systems.get(cp_id)
+        if not central_system:
+            raise ValueError("CentralSystem instance is not initialized")
+
         await central_system.on_stop_transaction(
             transaction_id=transaction_id,
             reason=reason
@@ -123,8 +134,11 @@ async def stop_transaction(cp_id):
 
 @app.route("/get_config/<cp_id>")
 async def get_configuration(cp_id):
-    global central_system
     try:
+        central_system = central_systems.get(cp_id)
+        if not central_system:
+            raise ValueError("CentralSystem instance is not initialized")
+
         await central_system.on_get_configuration()
         return jsonify({"status": "Get configuration received"}), 200
     except Exception as e:
@@ -132,11 +146,13 @@ async def get_configuration(cp_id):
         return jsonify({"error": str(e)}), 500
 
 async def start_servers():
-    global ws_server
+    # Initialize WebSocket server
     ws_server = await websockets.serve(on_connect, "0.0.0.0", port)
     logging.info(f"WebSocket server started on ws://0.0.0.0:{port}")
 
+    # Initialize API server
     api_server = asyncio.create_task(app.run_task(host='0.0.0.0', port=port))
+
     await ws_server.wait_closed()
     await api_server
 
