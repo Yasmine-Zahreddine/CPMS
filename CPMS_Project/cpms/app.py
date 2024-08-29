@@ -36,7 +36,7 @@ async def on_connect(cp_id):
 
     try:
         # Initialize CentralSystem for this connection
-        central_system = CentralSystem(supabase, cp_id, websocket._get_current_object())
+        central_system = CentralSystem(supabase, cp_id, websocket)
         central_systems[cp_id] = central_system
 
         while True:
@@ -89,7 +89,6 @@ async def route_message(cp_id, message):
         logging.error(f"Failed to parse message: {e}")
     except Exception as e:
         logging.error(f"Error handling message: {e}")
-
 
 @app.route('/start_transaction/<cp_id>', methods=['POST'])
 async def start_transaction(cp_id):
