@@ -43,7 +43,37 @@ async def on_connect(cp_id):
             try:
                 message = await websocket.receive()
                 logging.info(f"Received message from {cp_id}: {message}")
-                await route_message(cp_id, message)
+
+                # Handle the message directly here
+                try:
+                    msg = json.loads(message)
+                    action = msg[2]
+
+                    if action == "BootNotification":
+                        await central_system.on_boot_notification(*msg[3:])
+                    elif action == "Authorize":
+                        await central_system.on_authorize(*msg[3:])
+                    elif action == "Heartbeat":
+                        await central_system.on_heartbeat()
+                    elif action in ["StartTransaction", "StartCharging"]:
+                        await central_system.on_start_transaction(*msg[3:])
+                    elif action == "StopTransaction":
+                        await central_system.on_stop_transaction(*msg[3:])
+                    elif action == "RemoteStartTransaction":
+                        await central_system.on_remote_start_transaction(*msg[3:])
+                    elif action == "RemoteStopTransaction":
+                        await central_system.on_remote_stop_transaction(*msg[3:])
+                    elif action == "MeterValues":
+                        await central_system.on_meter_values(*msg[3:])
+                    elif action == "StatusNotification":
+                        await central_system.on_status_notification(*msg[3:])
+                    else:
+                        logging.warning(f"Unhandled message action: {action}")
+                except json.JSONDecodeError as e:
+                    logging.error(f"Failed to parse message: {e}")
+                except Exception as e:
+                    logging.error(f"Error handling message: {e}")
+
             except websockets.exceptions.ConnectionClosedError as e:
                 logging.error(f"Connection closed error: {e}")
                 break
@@ -54,41 +84,6 @@ async def on_connect(cp_id):
     finally:
         logging.info(f"Connection with cp_id {cp_id} closed.")
         central_systems.pop(cp_id, None)
-
-async def route_message(cp_id, message):
-    central_system = central_systems.get(cp_id)
-    if not central_system:
-        logging.error(f"No CentralSystem instance for cp_id: {cp_id}")
-        return
-
-    try:
-        msg = json.loads(message)
-        action = msg[2]
-
-        if action == "BootNotification":
-            await central_system.on_boot_notification(*msg[3:])
-        elif action == "Authorize":
-            await central_system.on_authorize(*msg[3:])
-        elif action == "Heartbeat":
-            await central_system.on_heartbeat()
-        elif action in ["StartTransaction", "StartCharging"]:
-            await central_system.on_start_transaction(*msg[3:])
-        elif action == "StopTransaction":
-            await central_system.on_stop_transaction(*msg[3:])
-        elif action == "RemoteStartTransaction":
-            await central_system.on_remote_start_transaction(*msg[3:])
-        elif action == "RemoteStopTransaction":
-            await central_system.on_remote_stop_transaction(*msg[3:])
-        elif action == "MeterValues":
-            await central_system.on_meter_values(*msg[3:])
-        elif action == "StatusNotification":
-            await central_system.on_status_notification(*msg[3:])
-        else:
-            logging.warning(f"Unhandled message action: {action}")
-    except json.JSONDecodeError as e:
-        logging.error(f"Failed to parse message: {e}")
-    except Exception as e:
-        logging.error(f"Error handling message: {e}")
 
 @app.route('/start_transaction/<cp_id>', methods=['POST'])
 async def start_transaction(cp_id):
