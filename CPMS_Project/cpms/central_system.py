@@ -94,9 +94,11 @@ class CentralSystem(CP):
         return call_result.Authorize(id_tag_info)
 
     @on(Action.BootNotification)
-    async def on_boot_notification(self, charge_point_vendor, charge_point_model, firmware_version,
+    async def on_boot_notification(self, charge_point_vendor, charge_point_model=None, firmware_version=None,
                                    charge_point_serial_number=None, reason=None):
         """Handle the BootNotification request from the charge point."""
+        charge_point_model = charge_point_model or "Unknown"
+        firmware_version = firmware_version or "Unknown"
         reason = reason or "Unknown"
         charge_point_serial_number = charge_point_serial_number or "Unknown"
         logging.info(
@@ -259,7 +261,7 @@ class CentralSystem(CP):
         )
 
     @on(Action.StatusNotification)
-    async def on_status_notification(self, connector_id, error_code, status, **kwargs):
+    async def on_status_notification(self, connector_id, error_code=None, status=None, **kwargs):
         """Handle the StatusNotification request from the charge point."""
         logging.info(
             f"StatusNotification received: connector_id={connector_id}, status={status}, error_code={error_code}")
