@@ -72,7 +72,7 @@ async def on_connect(cp_id):
 
     try:
         # Initialize CentralSystem for this connection
-        central_system = CentralSystem(supabase, cp_id, websocket._get_current_object())
+        central_system = CentralSystem(supabase, cp_id, websocket)
         central_systems[cp_id] = central_system
 
         while True:
