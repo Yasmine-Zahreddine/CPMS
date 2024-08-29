@@ -112,7 +112,7 @@ class CentralSystem(CP):
             'firmware_version': firmware_version,
         }
 
-        if charge_point_serial_number:
+        if charge_point_serial_number != "Unknown":
             try:
                 charge_point_id = fetch_charge_point(self.supabase,
                                                      charge_point_serial_number=charge_point_serial_number)
