@@ -25,9 +25,10 @@ def create_supabase_client() -> Client:
     logging.info(f"Creating Supabase client with URL: {SUPABASE_URL}")
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-supabase = create_supabase_client()
 
+supabase = create_supabase_client()
 central_systems = {}  # To hold CentralSystem instances for different connections
+
 
 async def route_message(cp_id, message):
     central_system = central_systems.get(cp_id)
@@ -64,6 +65,7 @@ async def route_message(cp_id, message):
     except Exception as e:
         logging.error(f"Error handling message: {e}")
 
+
 @app.websocket('/ws/<cp_id>')
 async def on_connect(cp_id):
     logging.info(f"New WebSocket connection with cp_id: {cp_id}")
@@ -73,15 +75,16 @@ async def on_connect(cp_id):
         central_system = CentralSystem(supabase, cp_id, websocket)
         central_systems[cp_id] = central_system
 
-        try:
-            # Handle incoming messages
-            async for message in websocket:
+        while True:
+            try:
+                message = await websocket.receive()
                 logging.info(f"Received message from {cp_id}: {message}")
-                await central_system.route_message(message)
-        except ConnectionClosedError as e:
-            logging.error(f"Connection closed error: {e}")
-        except Exception as e:
-            logging.error(f"Error in handling message: {e}")
+                await route_message(cp_id, message)
+            except websockets.exceptions.ConnectionClosedError as e:
+                logging.error(f"Connection closed error: {e}")
+                break
+            except Exception as e:
+                logging.error(f"Error handling message: {e}")
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
     finally:
