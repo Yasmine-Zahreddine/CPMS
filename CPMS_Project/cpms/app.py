@@ -69,17 +69,19 @@ async def on_connect(cp_id):
     logging.info(f"New WebSocket connection with cp_id: {cp_id}")
 
     try:
-        # Initialize CentralSystem for this connection
-        central_system = CentralSystem(supabase, cp_id, websocket)
+        central_system = CentralSystem(supabase, cp_id, websocket._get_current_object())
         central_systems[cp_id] = central_system
 
+        logging.info(f"CentralSystem instance created for cp_id: {cp_id}")
+
         async for message in websocket:
-            logging.info(f"Received message: {message}")
+            logging.info(f"Received message from cp_id {cp_id}: {message}")
             await route_message(cp_id, message)
+
     except ConnectionClosedError as e:
-        logging.error(f"Connection closed error: {e}")
+        logging.error(f"Connection closed error with cp_id {cp_id}: {e}")
     except Exception as e:
-        logging.error(f"Unexpected error: {e}")
+        logging.error(f"Unexpected error with cp_id {cp_id}: {e}")
     finally:
         logging.info(f"Connection with cp_id {cp_id} closed.")
         central_systems.pop(cp_id, None)  # Remove the instance when done
