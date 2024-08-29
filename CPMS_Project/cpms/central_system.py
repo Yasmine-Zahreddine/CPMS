@@ -263,6 +263,8 @@ class CentralSystem(CP):
     @on(Action.StatusNotification)
     async def on_status_notification(self, connector_id, error_code=None, status=None, **kwargs):
         """Handle the StatusNotification request from the charge point."""
+        status = status or "Unknown"
+        error_code = error_code or "Unknown"
         logging.info(
             f"StatusNotification received: connector_id={connector_id}, status={status}, error_code={error_code}")
         insert_diagnostic(self.supabase, self.id, "StatusNotification",
