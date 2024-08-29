@@ -7,6 +7,8 @@ from ocpp.v16.datatypes import IdTagInfo
 from datetime import datetime, timedelta
 import logging
 from supabase import Client
+from websockets import ConnectionClosedError
+
 from database import update_charge_point_status, insert_record, insert_diagnostic, fetch_charge_point, \
     generate_transaction_id, fetch_user_by_username_or_email, fetch_charging_session, fetch_transaction, update_record, \
     fetch_charge_point_by_id, update_transaction_status, update_charging_session_status
@@ -64,8 +66,7 @@ class CentralSystem(CP):
                     logging.error(f"Failed to parse message: {e}")
                 except Exception as e:
                     logging.error(f"Error handling message: {e}")
-
-            except self._connection.exceptions.ConnectionClosedError as e:
+            except ConnectionClosedError as e:
                 logging.error(f"Connection closed error: {e}")
                 break
             except Exception as e:
@@ -97,6 +98,7 @@ class CentralSystem(CP):
         """Handle the BootNotification request from the charge point."""
         reason = reason or "Unknown"
         charge_point_serial_number = charge_point_serial_number or "Unknown"
+        charge_point_model = charge_point_model or "Unknown"
         logging.info(
             f"BootNotification received from Charge Point Vendor: {charge_point_vendor}, Model: {charge_point_model}")
         insert_diagnostic(self.supabase, self.id,"BootNotification", f"Boot Notification received from Charge Point Vendor: {charge_point_vendor}, Model: {charge_point_model}")
@@ -251,7 +253,7 @@ class CentralSystem(CP):
         )
 
     @on(Action.StatusNotification)
-    async def on_status_notification(self, connector_id, error_code=None, status=None, **kwargs):
+    async def on_status_notification(self, connector_id, error_code, status, **kwargs):
         """Handle the StatusNotification request from the charge point."""
         logging.info(
             f"StatusNotification received: connector_id={connector_id}, status={status}, error_code={error_code}")
