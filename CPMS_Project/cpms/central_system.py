@@ -4,7 +4,7 @@ from ocpp.routing import on
 from ocpp.v16 import call_result, call, ChargePoint as CP
 from ocpp.v16.enums import Action, RegistrationStatus, AuthorizationStatus, RemoteStartStopStatus
 from ocpp.v16.datatypes import IdTagInfo
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 from supabase import Client
 from websockets import ConnectionClosedError
@@ -94,14 +94,15 @@ class CentralSystem(CP):
         return call_result.Authorize(id_tag_info)
 
     @on(Action.BootNotification)
-    async def on_boot_notification(self, charge_point_vendor, charge_point_model=None, firmware_version=None, charge_point_serial_number=None,reason=None):
+    async def on_boot_notification(self, charge_point_vendor, charge_point_model, firmware_version,
+                                   charge_point_serial_number=None, reason=None):
         """Handle the BootNotification request from the charge point."""
         reason = reason or "Unknown"
         charge_point_serial_number = charge_point_serial_number or "Unknown"
-        charge_point_model = charge_point_model or "Unknown"
         logging.info(
             f"BootNotification received from Charge Point Vendor: {charge_point_vendor}, Model: {charge_point_model}")
-        insert_diagnostic(self.supabase, self.id,"BootNotification", f"Boot Notification received from Charge Point Vendor: {charge_point_vendor}, Model: {charge_point_model}")
+        insert_diagnostic(self.supabase, self.id, "BootNotification",
+                          f"Boot Notification received from Charge Point Vendor: {charge_point_vendor}, Model: {charge_point_model}")
 
         cp_data = {
             'status': "available",
@@ -112,7 +113,7 @@ class CentralSystem(CP):
             'firmware_version': firmware_version,
         }
 
-        if charge_point_serial_number != "Unknown":
+        if charge_point_serial_number:
             try:
                 charge_point_id = fetch_charge_point(self.supabase,
                                                      charge_point_serial_number=charge_point_serial_number)
@@ -121,17 +122,19 @@ class CentralSystem(CP):
             except Exception as e:
                 logging.error(f"Failed to fetch charge point in database: {e}")
                 insert_diagnostic(self.supabase, self.id, "Exception",
-                                             f"Failed to fetch charge point in database: {e}")
+                                  f"Failed to fetch charge point in database: {e}")
 
         else:
             try:
                 charge_point_id = fetch_charge_point_by_id(self.supabase, self.id)
                 if not charge_point_id:
                     insert_record(self.supabase, "charge_points", cp_data)
-                    insert_diagnostic(self.supabase, self.id, "Charge Point Inserted", f"Inserted charge point {self.id} in database.")
+                    insert_diagnostic(self.supabase, self.id, "Charge Point Inserted",
+                                      f"Inserted charge point {self.id} in database.")
             except Exception as e:
                 logging.error(f"Failed to fetch for charge point with id {self.id}: {e}")
-                insert_diagnostic(self.supabase, self.id, "Exception", f"Failed to fetch for charge point with id {self.id}")
+                insert_diagnostic(self.supabase, self.id, "Exception",
+                                  f"Failed to fetch for charge point with id {self.id}")
 
         data = {
             "charge_point_id": self.id,
@@ -144,7 +147,8 @@ class CentralSystem(CP):
             insert_diagnostic(self.supabase, self.id, "BootNotification", "BootNotification inserted into the database")
         except Exception as e:
             logging.error(f"Failed to insert BootNotification data into database: {e}")
-            insert_diagnostic(self.supabase, self.id, "Exception", f"Failed to insert BootNotification into the database: {e}")
+            insert_diagnostic(self.supabase, self.id, "Exception",
+                              f"Failed to insert BootNotification into the database: {e}")
 
         return call_result.BootNotification(
             status=RegistrationStatus.accepted,
@@ -156,7 +160,7 @@ class CentralSystem(CP):
     async def on_heartbeat(self):
         """Handle the heartbeat request from the charge point."""
         logging.info(f"Heartbeat received from Charge Point Id : {self.id}")
-        insert_diagnostic(self.supabase, self.id, "Heartbeat", f"Heartbeat received from Charge Point id: {self.id} ")
+        insert_diagnostic(self.supabase, self.id, "Heartbeat", f"Heartbeat received from Charge Point id: {self.id}")
         self.charge_point_last_heartbeat[self.id] = datetime.utcnow()
         try:
             update_charge_point_status(self.supabase, self.id, "online")
@@ -168,16 +172,17 @@ class CentralSystem(CP):
         return call_result.Heartbeat(current_time=datetime.utcnow().isoformat() + "Z")
 
     @on(Action.MeterValues)
-    async def on_meter_values(self, connector_id, transaction_id, meter_value):
+    async def on_meter_values(self, charging_session_id, transaction_id, value):
         """Handle the MeterValues request from the charge point."""
         logging.info(
-            f"MeterValues received: connector id: {connector_id}, transaction id: {transaction_id}, value: {meter_value}")
-
-        # Example processing (update as needed)
+            f"MeterValues received: Charging session {charging_session_id}, transaction id : {transaction_id} ,value: {value}")
+        insert_diagnostic(self.supabase, self.id, "MeterValues",
+                          f"MeterValues received: Charging session {charging_session_id}, transaction id : {transaction_id} ,value: {value}")
         data = {
+            "charging_session_id": charging_session_id,
             "transaction_id": transaction_id,
-            "value": meter_value,  # Ensure you process this as needed
-            "unit": "kWh",
+            "value": value,
+            "unit": "kwH",
             "timestamp": datetime.utcnow()
         }
 
@@ -191,6 +196,7 @@ class CentralSystem(CP):
                               f"Failed to insert MeterValues data into database: {e}")
 
         return call_result.MeterValues()
+
 
     async def on_get_configuration(self, **kwargs):
         logging.info("Received the get configuration message.")
