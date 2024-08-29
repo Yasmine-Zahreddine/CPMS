@@ -93,6 +93,7 @@ async def stop_transaction(cp_id):
         logging.error(f"Error initiating stop transaction: {e}")
         return jsonify({"error": str(e)}), 500
 
+
 @app.route("/get_config/<cp_id>")
 async def get_configuration(cp_id):
     try:
@@ -106,15 +107,12 @@ async def get_configuration(cp_id):
         logging.error(f"Error calling get configuration: {e}")
         return jsonify({"error": str(e)}), 500
 
+
 async def start_servers():
     # Initialize WebSocket server
-    ws_server = await websockets.serve(on_connect, "0.0.0.0", port)
     logging.info(f"WebSocket server started on ws://0.0.0.0:{port}")
-
-    # Initialize API server
     api_server = asyncio.create_task(app.run_task(host='0.0.0.0', port=port))
 
-    await ws_server.wait_closed()
     await api_server
 
 if __name__ == "__main__":
