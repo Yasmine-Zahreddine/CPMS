@@ -28,7 +28,7 @@ class CentralSystem(CP):
 
 
     @on(Action.Authorize)
-    async def on_authorize(self, id_tag):
+    async def on_authorize(self, id_tag, websocket=None):
         """Handle the Authorize request from the charge point."""
         logging.info(f"Authorize request received for ID Tag: {id_tag}")
         insert_diagnostic(self.supabase, self.id, "Authorization", f"Authorization request received for ID tag {id_tag}")
@@ -45,6 +45,13 @@ class CentralSystem(CP):
             id_tag_info = IdTagInfo(
                 status=AuthorizationStatus.invalid
             )
+
+        # Use the websocket parameter if provided, otherwise use self.websocket
+        ws = websocket or self.websocket
+        if ws:
+            # You can use the websocket here if needed, for example:
+            # await ws.send(json.dumps({"message": "Authorization processed"}))
+            pass
 
         return call_result.Authorize(id_tag_info)
 

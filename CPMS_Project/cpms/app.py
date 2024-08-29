@@ -36,7 +36,7 @@ async def on_connect(cp_id):
 
     try:
         # Initialize CentralSystem for this connection
-        central_system = CentralSystem(supabase, cp_id, websocket)
+        central_system = CentralSystem(supabase, cp_id)
         central_systems[cp_id] = central_system
 
         while True:
@@ -50,23 +50,23 @@ async def on_connect(cp_id):
                     action = msg[2]
 
                     if action == "BootNotification":
-                        await central_system.on_boot_notification(*msg[3:])
+                        await central_system.on_boot_notification(websocket, *msg[3:])
                     elif action == "Authorize":
-                        await central_system.on_authorize(*msg[3:])
+                        await central_system.on_authorize(websocket, *msg[3:])
                     elif action == "Heartbeat":
-                        await central_system.on_heartbeat()
+                        await central_system.on_heartbeat(websocket)
                     elif action in ["StartTransaction", "StartCharging"]:
-                        await central_system.on_start_transaction(*msg[3:])
+                        await central_system.on_start_transaction(websocket, *msg[3:])
                     elif action == "StopTransaction":
-                        await central_system.on_stop_transaction(*msg[3:])
+                        await central_system.on_stop_transaction(websocket, *msg[3:])
                     elif action == "RemoteStartTransaction":
-                        await central_system.on_remote_start_transaction(*msg[3:])
+                        await central_system.on_remote_start_transaction(websocket, *msg[3:])
                     elif action == "RemoteStopTransaction":
-                        await central_system.on_remote_stop_transaction(*msg[3:])
+                        await central_system.on_remote_stop_transaction(websocket, *msg[3:])
                     elif action == "MeterValues":
-                        await central_system.on_meter_values(*msg[3:])
+                        await central_system.on_meter_values(websocket, *msg[3:])
                     elif action == "StatusNotification":
-                        await central_system.on_status_notification(*msg[3:])
+                        await central_system.on_status_notification(websocket, *msg[3:])
                     else:
                         logging.warning(f"Unhandled message action: {action}")
                 except json.JSONDecodeError as e:
