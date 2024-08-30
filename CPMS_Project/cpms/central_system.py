@@ -64,8 +64,6 @@ class CentralSystem(CP):
             logging.error(f"Error during cleanup after disconnection: {e}")
             insert_diagnostic(self.supabase, self.id, "Error", f"Error during cleanup after disconnection: {e}")
 
-        if not websocket.closed:
-            await websocket.close()
 
 
     @on(Action.Authorize)
