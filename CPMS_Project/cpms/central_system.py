@@ -73,7 +73,7 @@ class CentralSystem(CP):
         #         logging.error(f"Error handling message: {e}")
         try:
             while True:
-                message = await self.ws.receive()
+                message = await self.websocket.receive()
                 if message is None:  # Check if the message is None
                     break
                 await self.route_message(message)  # Route the message to the appropriate handler
