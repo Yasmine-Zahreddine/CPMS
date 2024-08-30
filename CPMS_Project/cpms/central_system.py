@@ -43,6 +43,31 @@ class CentralSystem(CP):
         finally:
             await self.on_disconnect(self.websocket)  # Call on_disconnect when the loop is done
 
+    async def on_disconnect(self, websocket):
+        """Handle the disconnection of the WebSocket connection."""
+        logging.info(f"Charge Point {self.id} disconnected.")
+        insert_diagnostic(self.supabase, self.id, "Disconnect", f"Charge Point {self.id} disconnected.")
+
+        # Update the charge point status to 'offline' in the database
+        try:
+            update_charge_point_status(self.supabase, self.id, "offline")
+            logging.info(f"Charge Point {self.id} status updated to offline.")
+            insert_diagnostic(self.supabase, self.id, "Disconnect",
+                              f"Charge Point {self.id} status updated to offline.")
+        except Exception as e:
+            logging.error(f"Failed to update charge point status to offline: {e}")
+            insert_diagnostic(self.supabase, self.id, "Error", f"Failed to update charge point status to offline: {e}")
+
+        try:
+            self.charge_point_last_heartbeat.pop(self.id, None)
+        except Exception as e:
+            logging.error(f"Error during cleanup after disconnection: {e}")
+            insert_diagnostic(self.supabase, self.id, "Error", f"Error during cleanup after disconnection: {e}")
+
+        if not websocket.closed:
+            await websocket.close()
+
+
     @on(Action.Authorize)
     async def on_authorize(self, id_tag):
         """Handle the Authorize request from the charge point."""
