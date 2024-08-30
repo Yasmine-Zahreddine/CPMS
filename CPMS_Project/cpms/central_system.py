@@ -160,17 +160,22 @@ class CentralSystem(CP):
         return call_result.Heartbeat(current_time=datetime.utcnow().isoformat() + "Z")
 
     @on(Action.MeterValues)
-    async def on_meter_values(self, charging_session_id, transaction_id, value):
+    async def on_meter_values(self, connector_id, transaction_id, meter_value, **kwargs):
         """Handle the MeterValues request from the charge point."""
         logging.info(
-            f"MeterValues received: Charging session {charging_session_id}, transaction id : {transaction_id} ,value: {value}")
+            f"MeterValues received: connector_id {connector_id}, transaction_id: {transaction_id}, meter_value: {meter_value}")
         insert_diagnostic(self.supabase, self.id, "MeterValues",
-                          f"MeterValues received: Charging session {charging_session_id}, transaction id : {transaction_id} ,value: {value}")
+                          f"MeterValues received: connector_id {connector_id}, transaction_id: {transaction_id}, meter_value: {meter_value}")
+
+        # Fetch the charging session ID using the transaction ID
+        charging_session_id = fetch_transaction(self.supabase, transaction_id)
+        charging_session_id = charging_session_id[0]['charging_session_id']
+
         data = {
             "charging_session_id": charging_session_id,
             "transaction_id": transaction_id,
-            "value": value,
-            "unit": "kwH",
+            "value": meter_value,  # Assuming 'value' is a part of meter_value
+            "unit": "Wh",  # Correct unit should be "Wh"
             "timestamp": datetime.utcnow()
         }
 
