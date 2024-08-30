@@ -94,13 +94,13 @@ class CentralSystem(CP):
         return call_result.Authorize(id_tag_info)
 
     @on(Action.BootNotification)
-    async def on_boot_notification(self, charge_point_vendor, charge_point_model=None, firmware_version=None,
-                                   charge_point_serial_number=None, reason=None):
+    async def on_boot_notification(self, charge_point_serial_number, firmware_version, charge_point_vendor,
+                                   charge_point_model, reason=None):
         """Handle the BootNotification request from the charge point."""
-        charge_point_model = charge_point_model or "Unknown"
-        firmware_version = firmware_version or "Unknown"
-        reason = reason or "Unknown"
-        charge_point_serial_number = charge_point_serial_number or "Unknown"
+        # charge_point_model = charge_point_model or "Unknown"
+        # firmware_version = firmware_version or "Unknown"
+        # reason = reason or "Unknown"
+        # charge_point_serial_number = charge_point_serial_number or "Unknown"
         logging.info(
             f"BootNotification received from Charge Point Vendor: {charge_point_vendor}, Model: {charge_point_model}")
         insert_diagnostic(self.supabase, self.id, "BootNotification",
@@ -115,35 +115,31 @@ class CentralSystem(CP):
             'firmware_version': firmware_version,
         }
 
-        if charge_point_serial_number:
-            try:
-                charge_point_id = fetch_charge_point(self.supabase,
-                                                     charge_point_serial_number=charge_point_serial_number)
-                if not charge_point_id:
-                    insert_record(self.supabase, "charge_points", cp_data)
-            except Exception as e:
-                logging.error(f"Failed to fetch charge point in database: {e}")
-                insert_diagnostic(self.supabase, self.id, "Exception",
-                                  f"Failed to fetch charge point in database: {e}")
-
-        else:
-            try:
+        try:
+            # Check if the charge point already exists by serial number or ID
+            charge_point_id = fetch_charge_point(self.supabase, charge_point_serial_number=charge_point_serial_number)
+            if not charge_point_id:
                 charge_point_id = fetch_charge_point_by_id(self.supabase, self.id)
-                if not charge_point_id:
-                    insert_record(self.supabase, "charge_points", cp_data)
-                    insert_diagnostic(self.supabase, self.id, "Charge Point Inserted",
-                                      f"Inserted charge point {self.id} in database.")
-            except Exception as e:
-                logging.error(f"Failed to fetch for charge point with id {self.id}: {e}")
-                insert_diagnostic(self.supabase, self.id, "Exception",
-                                  f"Failed to fetch for charge point with id {self.id}")
+
+            if not charge_point_id:
+                # Insert a new record if the charge point does not exist
+                insert_record(self.supabase, "charge_points", cp_data)
+                insert_diagnostic(self.supabase, self.id, "Charge Point Inserted",
+                                  f"Inserted charge point {self.id} in database.")
+            else:
+                # Log that the charge point already exists
+                logging.info(f"Charge point {self.id} already exists in the database.")
+        except Exception as e:
+            logging.error(f"Failed to fetch or insert charge point in database: {e}")
+            insert_diagnostic(self.supabase, self.id, "Exception",
+                              f"Failed to fetch or insert charge point in database: {e}")
 
         data = {
             "charge_point_id": self.id,
             "reason": reason
         }
         try:
-            # Insert or update charge point information in the database
+            # Insert the boot notification data
             insert_record(self.supabase, "boot_notifications", data)
             logging.info("BootNotification data inserted into database")
             insert_diagnostic(self.supabase, self.id, "BootNotification", "BootNotification inserted into the database")
@@ -261,7 +257,7 @@ class CentralSystem(CP):
         )
 
     @on(Action.StatusNotification)
-    async def on_status_notification(self, connector_id, error_code=None, status=None, **kwargs):
+    async def on_status_notification(self, connector_id, error_code, status, **kwargs):
         """Handle the StatusNotification request from the charge point."""
         status = status or "Unknown"
         error_code = error_code or "Unknown"
