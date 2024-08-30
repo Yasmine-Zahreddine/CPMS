@@ -32,45 +32,55 @@ class CentralSystem(CP):
 
 
     async def handle_message(self):
-        while True:
-            try:
-                message = await self._connection.receive()
-                logging.info(f"Received message from {self.id}: {message}")
-
-                # Handle the message directly here
-                try:
-                    msg = json.loads(message)
-                    action = msg[2]
-
-                    if action == "BootNotification":
-                        await self.on_boot_notification(*msg[3:])
-                    elif action == "Authorize":
-                        await self.on_authorize(*msg[3:])
-                    elif action == "Heartbeat":
-                        await self.on_heartbeat()
-                    elif action in ["StartTransaction", "StartCharging"]:
-                        await self.on_start_transaction(*msg[3:])
-                    elif action == "StopTransaction":
-                        await self.on_stop_transaction(*msg[3:])
-                    elif action == "RemoteStartTransaction":
-                        await self.on_remote_start_transaction(*msg[3:])
-                    elif action == "RemoteStopTransaction":
-                        await self.on_remote_stop_transaction(*msg[3:])
-                    elif action == "MeterValues":
-                        await self.on_meter_values(*msg[3:])
-                    elif action == "StatusNotification":
-                        await self.on_status_notification(*msg[3:])
-                    else:
-                        logging.warning(f"Unhandled message action: {action}")
-                except json.JSONDecodeError as e:
-                    logging.error(f"Failed to parse message: {e}")
-                except Exception as e:
-                    logging.error(f"Error handling message: {e}")
-            except ConnectionClosedError as e:
-                logging.error(f"Connection closed error: {e}")
-                break
-            except Exception as e:
-                logging.error(f"Error handling message: {e}")
+        # while True:
+        #     try:
+        #         message = await self._connection.receive()
+        #         logging.info(f"Received message from {self.id}: {message}")
+        #
+        #         # Handle the message directly here
+        #         try:
+        #             msg = json.loads(message)
+        #             action = msg[2]
+        #
+        #             if action == "BootNotification":
+        #                 await self.on_boot_notification(*msg[3:])
+        #             elif action == "Authorize":
+        #                 await self.on_authorize(*msg[3:])
+        #             elif action == "Heartbeat":
+        #                 await self.on_heartbeat()
+        #             elif action in ["StartTransaction", "StartCharging"]:
+        #                 await self.on_start_transaction(*msg[3:])
+        #             elif action == "StopTransaction":
+        #                 await self.on_stop_transaction(*msg[3:])
+        #             elif action == "RemoteStartTransaction":
+        #                 await self.on_remote_start_transaction(*msg[3:])
+        #             elif action == "RemoteStopTransaction":
+        #                 await self.on_remote_stop_transaction(*msg[3:])
+        #             elif action == "MeterValues":
+        #                 await self.on_meter_values(*msg[3:])
+        #             elif action == "StatusNotification":
+        #                 await self.on_status_notification(*msg[3:])
+        #             else:
+        #                 logging.warning(f"Unhandled message action: {action}")
+        #         except json.JSONDecodeError as e:
+        #             logging.error(f"Failed to parse message: {e}")
+        #         except Exception as e:
+        #             logging.error(f"Error handling message: {e}")
+        #     except ConnectionClosedError as e:
+        #         logging.error(f"Connection closed error: {e}")
+        #         break
+        #     except Exception as e:
+        #         logging.error(f"Error handling message: {e}")
+        try:
+            while True:
+                message = await self.ws.receive()
+                if message is None:  # Check if the message is None
+                    break
+                await self.route_message(message)  # Route the message to the appropriate handler
+        except Exception as e:
+            logging.error(f"Error in handle_message: {e}")
+        finally:
+            await self.on_disconnect(self.websocket)  # Call on_disconnect when the loop is done
 
     @on(Action.Authorize)
     async def on_authorize(self, id_tag):
