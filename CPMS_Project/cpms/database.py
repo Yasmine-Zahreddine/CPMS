@@ -206,3 +206,8 @@ def fetch_charge_point_by_id(supabase, charge_point_id):
         raise Exception(f"Charge point with id {charge_point_id} not found.")
 
 
+def update_firmware_status(supabase, firmware_id, status):
+    response = supabase.table("firmware").update({"status": status}).eq("version", firmware_id).execute()
+    if not response:
+        raise Exception(f"Failed to update firmware status.")
+    return response.data

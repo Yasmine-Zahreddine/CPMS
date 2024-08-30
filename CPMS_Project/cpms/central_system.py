@@ -11,7 +11,7 @@ from websockets import ConnectionClosedError
 
 from database import update_charge_point_status, insert_record, insert_diagnostic, fetch_charge_point, \
     generate_transaction_id, fetch_user_by_username_or_email, fetch_charging_session, fetch_transaction, update_record, \
-    fetch_charge_point_by_id, update_transaction_status, update_charging_session_status
+    fetch_charge_point_by_id, update_transaction_status, update_charging_session_status, update_firmware_status
 import asyncio
 
 
@@ -392,9 +392,29 @@ class CentralSystem(CP):
     async def on_data_transfer(self, vendor_id, message_id, data, **kwargs):
         logging.info(
             f"Received data transfer from charge point id {self.id} and vendor with id {vendor_id}, message id is {message_id}, data : {data}")
+        insert_diagnostic(self.supabase, self.id, "Data Transfer", f"Message of data transfer is {data}")
         return call_result.DataTransfer(DataTransferStatus.accepted)
 
     @on(Action.DiagnosticsStatusNotification)
     async def on_diagnostics_status_notification(self, status, **kwargs):
         logging.info(f"Received Diagnostics Status Notification from charge point id {self.id}, and status = {status}")
         insert_diagnostic(self.supabase, self.id, "DiagnosticsStatusNotification", f"Status of diagnostics is {status}")
+        return call_result.DiagnosticsStatusNotification()
+
+    @on(Action.FirmwareStatusNotification)
+    async def on_firmware_status_notification(self, status):
+        charge_point_data = fetch_charge_point_by_id(self.supabase, self.id)
+
+        if not charge_point_data:
+            logging.error(f"No charge point found with id {self.id}")
+            # Optionally return an error result or handle the case as needed
+            return call_result.FirmwareStatusNotification()
+
+        firmware_id = charge_point_data['firmware_version']
+
+        if firmware_id is None:
+            logging.error(f"Firmware version not found for charge point id {self.id}")
+            return call_result.FirmwareStatusNotification()
+
+        update_firmware_status(self.supabase, firmware_id, status)
+        return call_result.FirmwareStatusNotification()
