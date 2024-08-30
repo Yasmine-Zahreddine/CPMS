@@ -2,7 +2,7 @@ import json
 
 from ocpp.routing import on
 from ocpp.v16 import call_result, call, ChargePoint as CP
-from ocpp.v16.enums import Action, RegistrationStatus, AuthorizationStatus, RemoteStartStopStatus
+from ocpp.v16.enums import Action, RegistrationStatus, AuthorizationStatus, RemoteStartStopStatus, DataTransferStatus
 from ocpp.v16.datatypes import IdTagInfo
 from datetime import datetime
 import logging
@@ -408,3 +408,13 @@ class CentralSystem(CP):
 
         return call_result.RemoteStopTransaction(status=RemoteStartStopStatus.accepted)
 
+    @on(Action.DataTransfer)
+    async def on_data_transfer(self, vendor_id, message_id, data, **kwargs):
+        logging.info(
+            f"Received data transfer from charge point id {self.id} and vendor with id {vendor_id}, message id is {message_id}, data : {data}")
+        return call_result.DataTransfer(DataTransferStatus.accepted)
+
+    @on(Action.DiagnosticsStatusNotification)
+    async def on_diagnostics_status_notification(self, status, **kwargs):
+        logging.info(f"Received Diagnostics Status Notification from charge point id {self.id}, and status = {status}")
+        insert_diagnostic(self.supabase, self.id, "DiagnosticsStatusNotification", f"Status of diagnostics is {status}")
