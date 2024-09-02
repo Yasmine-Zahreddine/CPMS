@@ -195,7 +195,7 @@ class CentralSystem(CP):
         """Handle the StartTransaction request from the charge point."""
         logging.info(
             f"StartTransaction received: id_tag={id_tag}, charge point {self.id} ")
-        configuration = await self.on_get_configuration()
+        configuration = executeAsyncAfterDelay(self.on_get_configuration(), 2)
         if configuration:
             logging.info(f"configuration received : {configuration}")
         else:
