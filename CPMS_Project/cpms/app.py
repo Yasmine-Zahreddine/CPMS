@@ -42,9 +42,6 @@ async def on_connect(cp_id):
         await central_system.handle_message()
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
-    finally:
-        logging.info(f"Connection with cp_id {cp_id} closed.")
-        central_systems.pop(cp_id, None)
 
 
 @app.route('/start_transaction/<cp_id>', methods=['POST'])
