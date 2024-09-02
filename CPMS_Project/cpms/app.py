@@ -14,6 +14,7 @@ load_dotenv()
 app = Quart(__name__)
 port = int(os.getenv('PORT', 5000))
 
+
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
@@ -27,7 +28,7 @@ def create_supabase_client() -> Client:
 
 
 supabase = create_supabase_client()
-central_systems = {}  # To hold CentralSystem instances for different connections
+central_systems = {}
 
 
 @app.websocket('/ws/<cp_id>')
@@ -45,6 +46,7 @@ async def on_connect(cp_id):
         logging.info(f"Connection with cp_id {cp_id} closed.")
         central_systems.pop(cp_id, None)
 
+
 @app.route('/start_transaction/<cp_id>', methods=['POST'])
 async def start_transaction(cp_id):
     data = await request.json
@@ -58,6 +60,7 @@ async def start_transaction(cp_id):
     try:
         central_system = central_systems.get(cp_id)
         if not central_system:
+            logging.error(f"CentralSystem instance for cp_id {cp_id} not found.")
             raise ValueError("CentralSystem instance is not initialized")
 
         await central_system.on_start_transaction(
@@ -69,6 +72,7 @@ async def start_transaction(cp_id):
     except Exception as e:
         logging.error(f"Error initiating start transaction: {e}")
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/stop_transaction/<cp_id>', methods=['POST'])
 async def stop_transaction(cp_id):
@@ -94,7 +98,7 @@ async def stop_transaction(cp_id):
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/get_config/<cp_id>")
+@app.route("/get_config/<cp_id>", methods=['GET'])
 async def get_configuration(cp_id):
     try:
         central_system = central_systems.get(cp_id)
