@@ -33,6 +33,7 @@ central_systems = {}
 
 @app.websocket('/ws/<cp_id>')
 async def on_connect(cp_id):
+    global central_systems
     logging.info(f"New WebSocket connection with cp_id: {cp_id}")
 
     try:
