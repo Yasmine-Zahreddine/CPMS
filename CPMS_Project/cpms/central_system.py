@@ -2,7 +2,8 @@ import json
 
 from ocpp.routing import on
 from ocpp.v16 import call_result, call, ChargePoint as CP
-from ocpp.v16.enums import Action, RegistrationStatus, AuthorizationStatus, RemoteStartStopStatus, DataTransferStatus
+from ocpp.v16.enums import Action, RegistrationStatus, AuthorizationStatus, RemoteStartStopStatus, DataTransferStatus, \
+    ConfigurationStatus
 from ocpp.v16.datatypes import IdTagInfo
 from datetime import datetime
 import logging
@@ -413,17 +414,32 @@ class CentralSystem(CP):
         return call_result.FirmwareStatusNotification()
 
     async def on_get_configuration(self):
-        logging.info("Received the GetConfiguration message.")
+        logging.info("started the GetConfiguration message.")
         response = await self.call(call.GetConfiguration())
         # Handle the response
-        if response.configurationKey:
-            for config in response.configurationKey:
-                logging.info(f"Configuration Key: {config.key}, Value: {config.value}")
+        if response:
+            logging.info(f"received the get config message. {response}")
         else:
             logging.info("No configuration keys returned.")
         # Update the record with the response
-        cp_data = {
-            "id": self.id,
-            "configuration": response.configurationKey
-        }
-        update_record(self.supabase, "charge_points", self.id, cp_data)
+        # cp_data = {
+        #     "id": self.id,
+        #     "configuration": response
+        # }
+        # update_record(self.supabase, "charge_points", self.id, cp_data)
+
+    async def change_configuration(self, key: str, value: str):
+        request = call.ChangeConfiguration(key=key, value=value)
+
+        try:
+            response = await self.call(request)
+
+            if response.status == ConfigurationStatus.accepted:
+                logging.info(f"Configuration key '{key}' changed successfully to '{value}'.")
+            elif response.status == ConfigurationStatus.rejected:
+                logging.warning(f"Configuration change for key '{key}' was rejected by the charge point.")
+            else:
+                logging.error(f"Unknown status '{response.status}' received for ChangeConfiguration request.")
+
+        except Exception as e:
+            logging.error(f"Failed to change configuration key '{key}': {e}")

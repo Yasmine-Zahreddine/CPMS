@@ -8,6 +8,7 @@ import websockets
 from central_system import CentralSystem
 import os
 from dotenv import load_dotenv
+import uuid
 
 load_dotenv()
 
@@ -19,6 +20,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 logging.basicConfig(level=logging.INFO)
+
 
 def create_supabase_client() -> Client:
     if not SUPABASE_URL or not SUPABASE_KEY:
@@ -33,29 +35,31 @@ central_systems = {}
 
 @app.websocket('/ws/<cp_id>')
 async def on_connect(cp_id):
+    charge_point_id = str(cp_id).upper()
     global central_systems
     logging.info(f"New WebSocket connection with cp_id: {cp_id}")
 
     try:
-        if cp_id in central_systems:
+        if charge_point_id in central_systems:
             logging.warning(f"WebSocket connection already exists for cp_id: {cp_id}")
             return
 
         # Initialize CentralSystem for this connection
-        central_system = CentralSystem(supabase, cp_id, websocket._get_current_object())
-        central_systems[cp_id] = central_system
+        central_system = CentralSystem(supabase, charge_point_id, websocket._get_current_object())
+        central_systems[charge_point_id] = central_system
+        logging.info(f"CentralSystem instance created and stored for cp_id: {charge_point_id}")
         await central_system.handle_message()
     except Exception as e:
-        logging.error(f"Unexpected error: {e}")
+        logging.error(f"Unexpected error during WebSocket connection for cp_id {charge_point_id}: {e}")
     finally:
         # Cleanup the connection
-        logging.info(f"Connection with cp_id {cp_id} closed.")
-        central_systems.pop(cp_id, None)
-
+        logging.info(f"WebSocket connection with cp_id {cp_id} closed. Removing from central_systems.")
+        central_systems.pop(charge_point_id, None)
 
 @app.route('/start_transaction/<cp_id>', methods=['POST'])
 async def start_transaction(cp_id):
-    # Parse JSON data from the request
+    global central_systems
+    charge_point_id = str(cp_id).upper()
     data = await request.json
     id_tag = data.get('id_tag')
     meter = data.get('meter')
@@ -63,9 +67,10 @@ async def start_transaction(cp_id):
 
     if not id_tag:
         return jsonify({"error": "Missing required parameters"}), 400
-
     try:
-        central_system = central_systems.get(cp_id)
+        logging.info(f"Looking for CentralSystem instance for cp_id: {cp_id}")
+        central_system = central_systems.get(charge_point_id)
+
         if not central_system:
             logging.error(f"CentralSystem instance for cp_id {cp_id} not found.")
             return jsonify({"error": "CentralSystem instance is not initialized"}), 500
@@ -78,21 +83,23 @@ async def start_transaction(cp_id):
         return jsonify({"status": "Start transaction initiated"}), 200
 
     except Exception as e:
-        logging.error(f"Error initiating start transaction: {e}", exc_info=True)
+        logging.error(f"Error initiating start transaction for cp_id {cp_id}: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
 @app.route('/stop_transaction/<cp_id>', methods=['POST'])
 async def stop_transaction(cp_id):
+    global central_systems
     data = await request.json
     transaction_id = data.get('transaction_id')
     reason = data.get('reason')
+    charge_point_id = str(cp_id).upper()
 
     if not transaction_id:
         return jsonify({"error": "Missing transaction_id"}), 400
 
     try:
-        central_system = central_systems.get(cp_id)
+        central_system = central_systems.get(charge_point_id)
         if not central_system:
             raise ValueError("CentralSystem instance is not initialized")
 
@@ -108,8 +115,10 @@ async def stop_transaction(cp_id):
 
 @app.route("/get_config/<cp_id>", methods=['GET'])
 async def get_configuration(cp_id):
+    charge_point_id = str(cp_id).upper()
+
     try:
-        central_system = central_systems.get(cp_id)
+        central_system = central_systems.get(charge_point_id)
         if not central_system:
             raise ValueError("CentralSystem instance is not initialized")
 
@@ -119,6 +128,30 @@ async def get_configuration(cp_id):
         logging.error(f"Error calling get configuration: {e}")
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/change_config/<cp_id>', methods=['GET'])
+async def change_configuration(cp_id):
+    global central_systems
+    charge_point_id = str(cp_id).upper()
+    data = await request.json
+    key = data.get('key')
+    value = data.get('value')
+
+    if not key or value is None:
+        return jsonify({"error": "Missing required parameters"}), 400
+
+    try:
+        central_system = central_systems.get(charge_point_id)
+
+        if not central_system:
+            logging.error(f"CentralSystem instance for cp_id {cp_id} not found.")
+            return jsonify({"error": "CentralSystem instance is not initialized"}), 500
+        await central_system.change_configuration(key=key, value=value)
+        return jsonify({"status": "Configuration change initiated"}), 200
+
+    except Exception as e:
+        logging.error(f"Error changing configuration: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 async def start_servers():
     # Initialize WebSocket server
