@@ -56,7 +56,7 @@ async def start_transaction(cp_id):
         return jsonify({"error": "Missing required parameters"}), 400
 
     try:
-        central_system = central_systems.get(cp_id)
+        central_system = central_systems[cp_id]
         if not central_system:
             logging.error(f"CentralSystem instance for cp_id {cp_id} not found.")
             raise ValueError("CentralSystem instance is not initialized")
