@@ -190,19 +190,6 @@ class CentralSystem(CP):
 
         return call_result.MeterValues()
 
-
-    async def on_get_configuration(self, **kwargs):
-        logging.info("Received the get configuration message.")
-        try:
-            response = await self.call(call.GetConfiguration())
-            logging.info(f"Received GetConfiguration response: {response}")
-
-        except asyncio.TimeoutError:
-            logging.error("Timeout while waiting for GetConfiguration response.")
-
-        except Exception as e:
-            logging.error(f"Error occurred while handling GetConfiguration: {e}")
-
     @on(Action.StartTransaction)
     async def on_start_transaction(self, id_tag, meter_start, timestamp, **kwargs):
         """Handle the StartTransaction request from the charge point."""
@@ -423,3 +410,19 @@ class CentralSystem(CP):
 
         update_firmware_status(self.supabase, firmware_id, status)
         return call_result.FirmwareStatusNotification()
+
+    async def on_get_configuration(self):
+        logging.info("Received the GetConfiguration message.")
+        response = await self.call(call.GetConfiguration())
+        # Handle the response
+        if response.configurationKey:
+            for config in response.configurationKey:
+                logging.info(f"Configuration Key: {config.key}, Value: {config.value}")
+        else:
+            logging.info("No configuration keys returned.")
+        # Update the record with the response
+        cp_data = {
+            "id": self.id,
+            "configuration": response.configurationKey
+        }
+        update_record(self.supabase, "charge_points", self.id, cp_data)
