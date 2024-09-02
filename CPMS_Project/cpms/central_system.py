@@ -195,6 +195,11 @@ class CentralSystem(CP):
         """Handle the StartTransaction request from the charge point."""
         logging.info(
             f"StartTransaction received: id_tag={id_tag}, charge point {self.id} ")
+        configuration = await self.call(call.GetConfiguration())
+        if configuration:
+            logging.info(f"configuration received : {configuration}")
+        else:
+            logging.info("Configuration not received")
         insert_diagnostic(self.supabase, self.id, "StartTransaction", f"StartTransaction received: id_tag={id_tag}")
         logging.info(f"Inserted diagnostic for start transaction.")
         user_id = fetch_user_by_username_or_email(self.supabase, id_tag)
