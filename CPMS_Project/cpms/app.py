@@ -37,12 +37,20 @@ async def on_connect(cp_id):
     logging.info(f"New WebSocket connection with cp_id: {cp_id}")
 
     try:
+        if cp_id in central_systems:
+            logging.warning(f"WebSocket connection already exists for cp_id: {cp_id}")
+            return
+
         # Initialize CentralSystem for this connection
         central_system = CentralSystem(supabase, cp_id, websocket._get_current_object())
         central_systems[cp_id] = central_system
         await central_system.handle_message()
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
+    finally:
+        # Cleanup the connection
+        logging.info(f"Connection with cp_id {cp_id} closed.")
+        central_systems.pop(cp_id, None)
 
 
 @app.route('/start_transaction/<cp_id>', methods=['POST'])
